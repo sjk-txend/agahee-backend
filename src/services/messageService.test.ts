@@ -232,3 +232,75 @@ describe('messageService.deleteMessage', () => {
     ).rejects.toThrow('Message not found');
   });
 });
+
+
+describe('messageService.togglePin', () => {
+  it('pins a message successfully under the cap', async () => {
+    const sender = await createTestUser('pin-sender1@test.com');
+    const recipient = await createTestUser('pin-recipient1@test.com');
+    const msg = await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: 'test' });
+
+    const result = await messageService.togglePin(msg.id, true);
+    expect(result.isPinned).toBe(true);
+  });
+
+  it('allows exactly 5 pinned messages in one conversation', async () => {
+    const sender = await createTestUser('pin-sender2@test.com');
+    const recipient = await createTestUser('pin-recipient2@test.com');
+
+    const messages = [];
+    for (let i = 0; i < 5; i++) {
+      messages.push(await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: `msg ${i}` }));
+    }
+
+    for (const msg of messages) {
+      const result = await messageService.togglePin(msg.id, true);
+      expect(result.isPinned).toBe(true);
+    }
+  });
+
+  it('rejects pinning a 6th message in the same conversation', async () => {
+    const sender = await createTestUser('pin-sender3@test.com');
+    const recipient = await createTestUser('pin-recipient3@test.com');
+
+    const messages = [];
+    for (let i = 0; i < 6; i++) {
+      messages.push(await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: `msg ${i}` }));
+    }
+    for (let i = 0; i < 5; i++) {
+      await messageService.togglePin(messages[i].id, true);
+    }
+
+    await expect(
+      messageService.togglePin(messages[5].id, true)
+    ).rejects.toThrow('Cannot pin more than 5 messages');
+  });
+
+  it('allows unpinning even while at the cap', async () => {
+    const sender = await createTestUser('pin-sender4@test.com');
+    const recipient = await createTestUser('pin-recipient4@test.com');
+    const msg = await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: 'test' });
+
+    await messageService.togglePin(msg.id, true);
+    const result = await messageService.togglePin(msg.id, false);
+    expect(result.isPinned).toBe(false);
+  });
+
+  it('does not count pinned messages from a DIFFERENT conversation toward the cap', async () => {
+    const sender = await createTestUser('pin-sender5@test.com');
+    const recipientA = await createTestUser('pin-recipientA5@test.com');
+    const recipientB = await createTestUser('pin-recipientB5@test.com');
+
+    // Pin 5 messages in conversation with recipientA
+    for (let i = 0; i < 5; i++) {
+      const msg = await messageService.createMessage({ senderId: sender.id, recipientId: recipientA.id, text: `a${i}` });
+      await messageService.togglePin(msg.id, true);
+    }
+
+    // A 6th pin, but in a DIFFERENT conversation (with recipientB) — should succeed
+    const msgB = await messageService.createMessage({ senderId: sender.id, recipientId: recipientB.id, text: 'b' });
+    const result = await messageService.togglePin(msgB.id, true);
+
+    expect(result.isPinned).toBe(true);
+  });
+});
