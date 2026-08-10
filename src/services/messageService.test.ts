@@ -97,3 +97,108 @@ describe('messageService.createMessage', () => {
     expect(updatedSender?.conversations).toHaveLength(1);
   });
 });
+
+describe('messageService.getConversationHistory', () => {
+  it('excludes deleted messages from history', async () => {
+    const sender = await createTestUser('mh-sender1@test.com');
+    const recipient = await createTestUser('mh-recipient1@test.com');
+
+    const keepMsg = await messageService.createMessage({
+      senderId: sender.id, recipientId: recipient.id, text: 'keep this',
+    });
+    const deleteMsg = await messageService.createMessage({
+      senderId: sender.id, recipientId: recipient.id, text: 'delete this',
+    });
+    await messageService.deleteMessage(deleteMsg.id, sender.id);
+
+    const { messages } = await messageService.getConversationHistory({
+      currentUserId: sender.id,
+      otherUserId: recipient.id,
+    });
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].text).toBe('keep this');
+  });
+
+  it('returns messages oldest-first for display', async () => {
+    const sender = await createTestUser('mh-sender2@test.com');
+    const recipient = await createTestUser('mh-recipient2@test.com');
+
+    await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: 'first' });
+    await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: 'second' });
+    await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: 'third' });
+
+    const { messages } = await messageService.getConversationHistory({
+      currentUserId: sender.id,
+      otherUserId: recipient.id,
+    });
+
+    expect(messages.map((m) => m.text)).toEqual(['first', 'second', 'third']);
+  });
+
+  it('sets hasMore to true when more messages exist beyond the limit', async () => {
+    const sender = await createTestUser('mh-sender3@test.com');
+    const recipient = await createTestUser('mh-recipient3@test.com');
+
+    for (let i = 0; i < 5; i++) {
+      await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: `msg ${i}` });
+    }
+
+    const { messages, hasMore } = await messageService.getConversationHistory({
+      currentUserId: sender.id,
+      otherUserId: recipient.id,
+      limit: 3,
+    });
+
+    expect(messages).toHaveLength(3);
+    expect(hasMore).toBe(true);
+  });
+
+  it('sets hasMore to false when all messages fit within the limit', async () => {
+    const sender = await createTestUser('mh-sender4@test.com');
+    const recipient = await createTestUser('mh-recipient4@test.com');
+
+    await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: 'only message' });
+
+    const { messages, hasMore } = await messageService.getConversationHistory({
+      currentUserId: sender.id,
+      otherUserId: recipient.id,
+      limit: 30,
+    });
+
+    expect(messages).toHaveLength(1);
+    expect(hasMore).toBe(false);
+  });
+
+  it('sees messages regardless of who sent vs received, within the same pair', async () => {
+    const userA = await createTestUser('mh-usera@test.com');
+    const userB = await createTestUser('mh-userb@test.com');
+
+    await messageService.createMessage({ senderId: userA.id, recipientId: userB.id, text: 'from A' });
+    await messageService.createMessage({ senderId: userB.id, recipientId: userA.id, text: 'from B' });
+
+    const { messages } = await messageService.getConversationHistory({
+      currentUserId: userA.id,
+      otherUserId: userB.id,
+    });
+
+    expect(messages).toHaveLength(2);
+  });
+
+  it('does NOT include messages from an unrelated conversation', async () => {
+    const userA = await createTestUser('mh-isolated-a@test.com');
+    const userB = await createTestUser('mh-isolated-b@test.com');
+    const userC = await createTestUser('mh-isolated-c@test.com');
+
+    await messageService.createMessage({ senderId: userA.id, recipientId: userB.id, text: 'A to B' });
+    await messageService.createMessage({ senderId: userA.id, recipientId: userC.id, text: 'A to C' });
+
+    const { messages } = await messageService.getConversationHistory({
+      currentUserId: userA.id,
+      otherUserId: userB.id,
+    });
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].text).toBe('A to B');
+  });
+});
