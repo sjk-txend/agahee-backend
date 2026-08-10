@@ -202,3 +202,33 @@ describe('messageService.getConversationHistory', () => {
     expect(messages[0].text).toBe('A to B');
   });
 });
+
+describe('messageService.deleteMessage', () => {
+  it('allows the original sender to delete their own message', async () => {
+    const sender = await createTestUser('del-sender1@test.com');
+    const recipient = await createTestUser('del-recipient1@test.com');
+    const msg = await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: 'test' });
+
+    const result = await messageService.deleteMessage(msg.id, sender.id);
+    expect(result.isDeleted).toBe(true);
+  });
+
+  it('rejects deletion attempted by anyone other than the sender', async () => {
+    const sender = await createTestUser('del-sender2@test.com');
+    const recipient = await createTestUser('del-recipient2@test.com');
+    const msg = await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: 'test' });
+
+    await expect(
+      messageService.deleteMessage(msg.id, recipient.id) // recipient trying to delete sender's message
+    ).rejects.toThrow('Only the sender can delete this message');
+  });
+
+  it('rejects deleting a message that does not exist', async () => {
+    const sender = await createTestUser('del-sender3@test.com');
+    const fakeMessageId = '507f1f77bcf86cd799439011';
+
+    await expect(
+      messageService.deleteMessage(fakeMessageId, sender.id)
+    ).rejects.toThrow('Message not found');
+  });
+});
