@@ -34,3 +34,53 @@ describe('authService.registerUser', () => {
     ).rejects.toThrow('An account with this email already exists');
   });
 });
+
+describe('authService.loginUser', () => {
+  it('logs in successfully with correct credentials and returns a token', async () => {
+    await authService.registerUser({ name: 'Login Test', email: 'login@test.com', password: 'correctpass' });
+
+    const result = await authService.loginUser({ email: 'login@test.com', password: 'correctpass' });
+
+    expect(result.token).toBeDefined();
+    expect(typeof result.token).toBe('string');
+    expect(result.user.email).toBe('login@test.com');
+  });
+
+  it('rejects a correct email with the wrong password', async () => {
+    await authService.registerUser({ name: 'Login Test', email: 'login2@test.com', password: 'correctpass' });
+
+    await expect(
+      authService.loginUser({ email: 'login2@test.com', password: 'wrongpass' })
+    ).rejects.toThrow('Invalid email or password');
+  });
+
+  it('rejects an email that was never registered', async () => {
+    await expect(
+      authService.loginUser({ email: 'nobody@test.com', password: 'anything' })
+    ).rejects.toThrow('Invalid email or password');
+  });
+
+  it('uses the SAME error message for wrong password and nonexistent email', async () => {
+    // This confirms the security property directly, not just that both fail —
+    // if someone later "improves" one error message and forgets the other,
+    // this test catches the mismatch immediately.
+    await authService.registerUser({ name: 'X', email: 'exists@test.com', password: 'correctpass' });
+
+    let errorForWrongPassword = '';
+    let errorForNoEmail = '';
+
+    try {
+      await authService.loginUser({ email: 'exists@test.com', password: 'wrong' });
+    } catch (err) {
+      errorForWrongPassword = (err as Error).message;
+    }
+
+    try {
+      await authService.loginUser({ email: 'doesnotexist@test.com', password: 'wrong' });
+    } catch (err) {
+      errorForNoEmail = (err as Error).message;
+    }
+
+    expect(errorForWrongPassword).toBe(errorForNoEmail);
+  });
+});
