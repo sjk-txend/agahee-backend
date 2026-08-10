@@ -304,3 +304,58 @@ describe('messageService.togglePin', () => {
     expect(result.isPinned).toBe(true);
   });
 });
+
+describe('messageService reactions', () => {
+  it('adds a reaction', async () => {
+    const sender = await createTestUser('react-sender1@test.com');
+    const recipient = await createTestUser('react-recipient1@test.com');
+    const msg = await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: 'test' });
+
+    const result = await messageService.addReaction(msg.id, recipient.id, '👍');
+    expect(result.reactions).toHaveLength(1);
+    expect(result.reactions[0].emoji).toBe('👍');
+  });
+
+  it('replaces a reaction from the same user rather than adding a second one', async () => {
+    const sender = await createTestUser('react-sender2@test.com');
+    const recipient = await createTestUser('react-recipient2@test.com');
+    const msg = await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: 'test' });
+
+    await messageService.addReaction(msg.id, recipient.id, '👍');
+    const result = await messageService.addReaction(msg.id, recipient.id, '❤️');
+
+    expect(result.reactions).toHaveLength(1);
+    expect(result.reactions[0].emoji).toBe('❤️');
+  });
+
+  it('allows different users to react to the same message independently', async () => {
+    const sender = await createTestUser('react-sender3@test.com');
+    const recipient = await createTestUser('react-recipient3@test.com');
+    const msg = await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: 'test' });
+
+    await messageService.addReaction(msg.id, sender.id, '😂');
+    const result = await messageService.addReaction(msg.id, recipient.id, '👍');
+
+    expect(result.reactions).toHaveLength(2);
+  });
+
+  it('removes a reaction', async () => {
+    const sender = await createTestUser('react-sender4@test.com');
+    const recipient = await createTestUser('react-recipient4@test.com');
+    const msg = await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: 'test' });
+
+    await messageService.addReaction(msg.id, recipient.id, '👍');
+    const result = await messageService.removeReaction(msg.id, recipient.id);
+
+    expect(result.reactions).toHaveLength(0);
+  });
+
+  it('does not error when removing a reaction that was never added', async () => {
+    const sender = await createTestUser('react-sender5@test.com');
+    const recipient = await createTestUser('react-recipient5@test.com');
+    const msg = await messageService.createMessage({ senderId: sender.id, recipientId: recipient.id, text: 'test' });
+
+    const result = await messageService.removeReaction(msg.id, recipient.id);
+    expect(result.reactions).toHaveLength(0);
+  });
+});
