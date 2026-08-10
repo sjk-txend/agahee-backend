@@ -18,6 +18,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 300));
   await mongoose.disconnect();
   await mongoServer.stop();
 });
