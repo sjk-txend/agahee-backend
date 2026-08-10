@@ -14,5 +14,5 @@ export function errorHandler(
 }
 
 export function notFound(req: Request, res: Response, next: NextFunction): void {
-  next(new AppError(`Route not found: ${req.originalUrl}`, 404));k
+  next(new AppError(`Route not found: ${req.originalUrl}`, 404));
 }
